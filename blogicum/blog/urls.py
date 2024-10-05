@@ -1,6 +1,7 @@
 from django.urls import path
 
 from . import views
+# from . import views не импортирует CBV, поэтому так
 from .views import (
     PostCreateView, PostUpdateView, AddCommentView, EditCommentView
 )
@@ -16,7 +17,10 @@ urlpatterns = [
         name='category_posts'
     ),
     path('posts/create/', PostCreateView.as_view(), name='create_post'),
-    path('posts/<pk>/edit/', PostUpdateView.as_view(), name='edit_post'),
+    path(
+        'posts/<int:post_id>/edit/', PostUpdateView.as_view(),
+        name='edit_post'
+    ),
     path(
         'posts/<int:post_id>/comment/', AddCommentView.as_view(),
         name='add_comment'

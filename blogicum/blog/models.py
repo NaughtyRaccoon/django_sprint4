@@ -7,6 +7,8 @@ TITLE_SIZE = 256
 
 SHORT_NAME = 15
 
+MAX_COMMENT_LENGTH = 100
+
 
 class PublishedModel(models.Model):
     """
@@ -137,5 +139,9 @@ class Comment(models.Model):
     text = models.TextField()
     created_at = models.DateTimeField(auto_now_add=True)
 
+    class Meta:
+        verbose_name = 'Комментарий'
+        verbose_name_plural = 'Комментарии'
+
     def __str__(self):
-        return self.text
+        return self.text[:MAX_COMMENT_LENGTH]

@@ -7,13 +7,14 @@ from django.core.paginator import Paginator
 from django.urls import reverse
 from django.http import HttpResponseForbidden, HttpResponseRedirect, Http404
 from django.core.exceptions import PermissionDenied
+from django.db.models import Count
 
 from blog.models import Category, Post, Comment
 from .utils import posts_filter, timezone
 from .forms import PostForm, UserProfileForm, CommentForm
 
 
-POSTS_LIMIT = 5
+POSTS_LIMIT = 10
 
 
 class PostCreateView(LoginRequiredMixin, CreateView):
@@ -23,12 +24,7 @@ class PostCreateView(LoginRequiredMixin, CreateView):
 
     def form_valid(self, form):
         form.instance.author = self.request.user
-        form.instance.image = self.request.FILES.get('image')
-
-        if form.instance.pub_date > timezone.now():
-            form.instance.is_published = False
-        else:
-            form.instance.is_published = True
+        form.instance.is_published = form.instance.pub_date <= timezone.now()
         return super().form_valid(form)
 
     def get_success_url(self):
@@ -41,6 +37,7 @@ class PostUpdateView(LoginRequiredMixin, UpdateView):
     model = Post
     form_class = PostForm
     template_name = 'blog/create.html'
+    pk_url_kwarg = 'post_id'
 
     def dispatch(self, request, *args, **kwargs):
         post = self.get_object()
@@ -136,13 +133,17 @@ class CommentDeleteConfirmView(LoginRequiredMixin, TemplateView):
         return HttpResponseForbidden()
 
 
-def index(request):
-    post_list = posts_filter().order_by('-pub_date')
-    for post in post_list:
-        post.comment_count = post.comments.count()
-    paginator = Paginator(post_list, 10)  # 10 публикаций на странице
+def posts_paginator(request, posts, posts_limit):
+    paginator = Paginator(posts, posts_limit)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
+    return page_obj
+
+
+def index(request):
+    post_list = posts_filter().annotate(
+        comment_count=Count('comments')).order_by('-pub_date')
+    page_obj = posts_paginator(request, post_list, POSTS_LIMIT)
     comment_count = Comment.objects.count()
     comments = Comment.objects.all()
     context = {
@@ -178,12 +179,8 @@ def category_posts(request, category_slug):
     )
     posts = posts_filter(
         category=category, include_author_location=True
-    ).order_by('-pub_date')
-    for post in posts:
-        post.comment_count = post.comments.count()
-    paginator = Paginator(posts, 10)  # 10 публикаций на странице
-    page_number = request.GET.get('page')
-    page_obj = paginator.get_page(page_number)
+    ).annotate(comment_count=Count('comments')).order_by('-pub_date')
+    page_obj = posts_paginator(request, posts, POSTS_LIMIT)
     comment_count = Comment.objects.filter(post__category=category).count()
     comments = Comment.objects.filter(post__category=category)
     context = {
@@ -196,12 +193,9 @@ def category_posts(request, category_slug):
 
 def profile(request, username):
     user = get_object_or_404(User, username=username)
-    posts = user.post_set.all().order_by('-pub_date')
-    for post in posts:
-        post.comment_count = post.comments.count()
-    paginator = Paginator(posts, 10)  # 10 публикаций на странице
-    page_number = request.GET.get('page')
-    page_obj = paginator.get_page(page_number)
+    posts = user.post_set.all().annotate(
+        comment_count=Count('comments')).order_by('-pub_date')
+    page_obj = posts_paginator(request, posts, POSTS_LIMIT)
     return render(
         request, 'blog/profile.html', {'profile': user, 'page_obj': page_obj}
     )
@@ -210,11 +204,8 @@ def profile(request, username):
 @login_required
 def edit_profile(request):
     user = request.user
-    if request.method == 'POST':
-        form = UserProfileForm(request.POST, instance=user)
-        if form.is_valid():
-            form.save()
-            return redirect('blog:profile', username=request.user.username)
-    else:
-        form = UserProfileForm(instance=user)
+    form = UserProfileForm(request.POST or None, instance=user)
+    if form.is_valid():
+        form.save()
+        return redirect('blog:profile', username=request.user.username)
     return render(request, 'blog/user.html', {'form': form})

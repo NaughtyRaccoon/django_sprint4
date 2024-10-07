@@ -3,14 +3,13 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
-from django.core.paginator import Paginator
 from django.urls import reverse
 from django.http import HttpResponseForbidden, HttpResponseRedirect, Http404
 from django.core.exceptions import PermissionDenied
 from django.db.models import Count
 
 from blog.models import Category, Post, Comment
-from .utils import posts_filter, timezone
+from .utils import posts_filter, posts_paginator, timezone
 from .forms import PostForm, UserProfileForm, CommentForm
 
 
@@ -131,13 +130,6 @@ class CommentDeleteConfirmView(LoginRequiredMixin, TemplateView):
                 reverse('blog:post_detail', args=[comment.post_id])
             )
         return HttpResponseForbidden()
-
-
-def posts_paginator(request, posts, posts_limit):
-    paginator = Paginator(posts, posts_limit)
-    page_number = request.GET.get('page')
-    page_obj = paginator.get_page(page_number)
-    return page_obj
 
 
 def index(request):
